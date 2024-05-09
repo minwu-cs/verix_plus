@@ -33,26 +33,6 @@ gtsrb_labels = ['50 mph', '30 mph', 'yield', 'priority road',
 show a simple example usage of VeriX. 
 """
 
-
-# x = x_test[0:2]
-# x = np.moveaxis(x, -1, 1)
-# x = torch.from_numpy(x)
-#
-# model = torch.load("models/gtsrb-cnn.pt")
-# model.eval()
-# model(x)
-#
-# from auto_LiRPA import BoundedModule, BoundedTensor, PerturbationLpNorm
-# b_model = BoundedModule(model, x)
-# ptb = PerturbationLpNorm(eps=0.01, norm=np.inf, x_L=x, x_U=x)
-# b_x = BoundedTensor(x, ptb)
-# b_model(b_x)
-# lb, up = b_model.compute_bounds(x=b_x, method='IBP')
-#
-#
-#
-# exit()
-
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, default='gtsrb')
 parser.add_argument('--network', type=str, default='gtsrb-cnn')
