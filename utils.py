@@ -46,6 +46,25 @@ class GTSRB10x2(nn.Sequential):
         return x
 
 
+class MNISTCNN(nn.Module):
+    def __init__(self):
+        super(MNISTCNN, self).__init__()
+        self.conv1 = nn.Conv2d(1, 4, kernel_size=3, stride=2)
+        self.conv2 = nn.Conv2d(4, 4, kernel_size=3, stride=2)
+        self.flatten = nn.Flatten()
+        self.fc1 = nn.Linear(144, 20)
+        self.fc2 = nn.Linear(20, 10)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = self.flatten(x.permute(0, 2, 3, 1))
+        x = self.fc1(x)
+        x = torch.relu(x)
+        x = self.fc2(x)
+        return x
+
+
 class GTSRBCNN(nn.Module):
     def __init__(self):
         super(GTSRBCNN, self).__init__()

@@ -257,7 +257,7 @@ class VeriX:
             self.sensitivity = output_lower.reshape(width, height)
 
         elif self.traverse == "bounds":
-            if self.keras_model.name.contains("10x2"):
+            if self.keras_model.name.__contains__("10x2"):
                 width, height, channel = self.image.shape[0], self.image.shape[1], self.image.shape[2]
                 image = torch.from_numpy(self.image.flatten())
                 lower = image.repeat(width * height, 1)
@@ -284,11 +284,11 @@ class VeriX:
                 self.inputVars = sorted_index
                 self.sensitivity = output_lower.reshape(width, height)
 
-            elif self.keras_model.name.contains("cnn"):
-            # elif self.traverse == "auto_LiRPA":
+            elif self.keras_model.name.__contains__("cnn"):
+                # elif self.traverse == "auto_LiRPA":
                 width, height, channel = self.image.shape[0], self.image.shape[1], self.image.shape[2]
                 image = self.image.flatten()
-                images = np.array([image]*width*height)
+                images = np.array([image] * width * height)
                 lower = images.copy()
                 upper = images.copy()
                 # lower = image.repeat(width * height, 1)
@@ -305,11 +305,11 @@ class VeriX:
                         upper[i, 3 * i + 1] = min(1, image[3 * i + 1] + epsilon)
                         lower[i, 3 * i + 2] = max(0, image[3 * i + 2] - epsilon)
                         upper[i, 3 * i + 2] = min(1, image[3 * i + 2] + epsilon)
-                images = images.reshape(width*height, width, height, channel)
+                images = images.reshape(width * height, width, height, channel)
                 images = torch.from_numpy(np.moveaxis(images, -1, 1))
-                lower = lower.reshape(width*height, width, height, channel)
+                lower = lower.reshape(width * height, width, height, channel)
                 lower = torch.from_numpy(np.moveaxis(lower, -1, 1))
-                upper = upper.reshape(width*height, width, height, channel)
+                upper = upper.reshape(width * height, width, height, channel)
                 upper = torch.from_numpy(np.moveaxis(upper, -1, 1))
 
                 b_model = BoundedModule(self.torch_model, images)
