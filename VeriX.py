@@ -88,6 +88,12 @@ class VeriX:
         """
         Load the keras model.
         """
+        from keras.models import Sequential
+        import tensorflow_ranking as tfr
+        self.keras_model = Sequential()
+        self.keras_model.compile(loss=tfr.keras.losses.SoftmaxLoss(),
+                                 optimizer=tf.keras.optimizers.Adam(),
+                                 metrics=['accuracy'])
         self.keras_model = load_model(model_path + ".h5")
         """
         Load the pytorch model.
@@ -98,110 +104,6 @@ class VeriX:
         if plot_original:
             self.plot_original()
 
-    def dynamic_sequential(self, epsilon, traverse):
-        self.traverse = traverse
-        self.unsat_set = []
-        self.sat_set = []
-        pixels = self.inputVars.copy()
-        while len(pixels):
-            # tic = time.time()
-            pixels = self.dynamic_ibp(epsilon=epsilon, rank_set=pixels)
-            # toc = time.time()
-            # print("compute ibp bounds time:", toc - tic)
-            i = pixels[0]
-            # tic = time.time()
-            if self.check_robust(pixels=np.concatenate([[i], self.unsat_set]),
-                                 epsilon=epsilon):
-                self.unsat_set.append(i)
-            else:
-                self.sat_set.append(i)
-            # toc = time.time()
-            # print("marabou solve time:", toc - tic)
-            pixels = np.delete(pixels, [0])
-            # print(len(pixels))
-        self.plot_explanation()
-        self.record_statistics()
-
-    def dynamic_ibp(self, epsilon, rank_set):
-        # net = torch.load("models/mnist-10x2.pt")
-        # net.eval()
-        # factory = BoundModelFactory()
-        # net = factory.build(net)
-        x = torch.from_numpy(self.image.reshape(784))
-        lower = x.repeat(rank_set.shape[0], 1)
-        upper = x.repeat(rank_set.shape[0], 1)
-        for i in np.arange(rank_set.shape[0]):
-            k = rank_set[i]
-            lower[i, k] = max(0, x[k] - epsilon)
-            upper[i, k] = min(1, x[k] + epsilon)
-            for j in self.unsat_set:
-                lower[i, j] = max(0, x[j] - epsilon)
-                upper[i, j] = min(1, x[j] + epsilon)
-        input_bounds = HyperRectangle(lower, upper)
-        # tic = time.time()
-        ibp_bounds = self.torch_model.ibp(input_bounds)
-        # toc = time.time()
-        # print("compute ibp bounds time:", toc - tic)
-        output_lower = ibp_bounds.lower[:, self.label].detach().numpy()
-        # output_lower = np.delete(output_lower, self.unsat_set)
-        sort_bounds = np.stack((rank_set, output_lower), axis=-1)
-        sorted_index = sort_bounds[sort_bounds[:, -1].argsort()[::-1]][:, 0]
-        return sorted_index.astype(int)
-
-    def dynamic_traversal_mara(self, epsilon):
-        self.unsat_set = []
-        self.sat_set = []
-        # for pixel in self.inputVars:
-        #     if self.check_robust(pixels=np.concatenate([[pixel], self.unsat_set]),
-        #                          epsilon=epsilon):
-        #         self.unsat_set.append(pixel)
-        #     else:
-        #         self.sat_set.append(pixel)
-        pixels = self.inputVars.copy()
-        while len(pixels):
-            pixels = list(pixels)
-            i = pixels.pop(0)
-            if self.check_robust(pixels=np.concatenate([[i], self.unsat_set]),
-                                 epsilon=epsilon):
-                self.unsat_set.append(i)
-            else:
-                self.sat_set.append(i)
-            pixels = self.dynamic_mara(epsilon=epsilon, rank_set=pixels)
-            print(len(pixels))
-        self.plot_explanation()
-        self.record_statistics()
-
-    # def dynamic_ibp(self, epsilon, rank_set):
-
-    def dynamic_mara(self,
-                     epsilon,
-                     rank_set):
-        options = Marabou.createOptions(tighteningStrategy="ibp",
-                                        verbosity=0)
-        width, height, channel = self.image.shape[0], self.image.shape[1], self.image.shape[2]
-        image = self.image.reshape(width * height, channel)
-
-        output_lower = []
-        for i in rank_set:
-            self.mara_model.setLowerBound(i, max(0, image[i][0] - epsilon))
-            self.mara_model.setUpperBound(i, min(1, image[i][0] + epsilon))
-            for k in self.unsat_set:
-                self.mara_model.setLowerBound(k, max(0, image[k][0] - epsilon))
-                self.mara_model.setUpperBound(k, min(1, image[k][0] + epsilon))
-            rest_pixels = list(rank_set)
-            rest_pixels.remove(i)
-            for j in rest_pixels + self.sat_set:
-                self.mara_model.setLowerBound(j, image[j][0])
-                self.mara_model.setUpperBound(j, image[j][0])
-            exitCode, bounds, _ = self.mara_model.calculateBounds(options=options, verbose=False)
-            self.mara_model.clearProperty()
-            lower = bounds[self.outputVars[self.label]][0]
-            output_lower.append(lower)
-        output_lower = np.asarray(output_lower)
-        sort_bounds = np.stack((rank_set, output_lower), axis=-1)
-        sorted_index = sort_bounds[sort_bounds[:, -1].argsort()[::-1]][:, 0]
-        # sorted_index = output_lower.argsort()[::-1]
-        return sorted_index.astype(int)
 
     def new_traversal(self,
                       epsilon,
@@ -211,52 +113,8 @@ class VeriX:
         pixels = self.inputVars
 
         output_lower = []
-        if self.traverse == "bounds_marabou":
-            options = Marabou.createOptions(tighteningStrategy="ibp",
-                                            verbosity=0)
-            width, height, channel = self.image.shape[0], self.image.shape[1], self.image.shape[2]
-            image = self.image.reshape(width * height, channel)
-            for i in pixels:
-                if self.dataset == "mnist":
-                    self.mara_model.setLowerBound(i, max(0, image[i][0] - epsilon))
-                    self.mara_model.setUpperBound(i, min(1, image[i][0] + epsilon))
-                elif self.dataset == "gtsrb":
-                    self.mara_model.setLowerBound(3 * i, max(0, image[i][0] - epsilon))
-                    self.mara_model.setUpperBound(3 * i, min(1, image[i][0] + epsilon))
-                    self.mara_model.setLowerBound(3 * i + 1, max(0, image[i][1] - epsilon))
-                    self.mara_model.setUpperBound(3 * i + 1, min(1, image[i][1] + epsilon))
-                    self.mara_model.setLowerBound(3 * i + 2, max(0, image[i][2] - epsilon))
-                    self.mara_model.setUpperBound(3 * i + 2, min(1, image[i][2] + epsilon))
-                else:
-                    print("unsupported dataset")
-                rest_pixels = list(pixels)
-                rest_pixels.remove(i)
-                for j in rest_pixels:
-                    if self.dataset == "mnist":
-                        self.mara_model.setLowerBound(j, image[j][0])
-                        self.mara_model.setUpperBound(j, image[j][0])
-                    elif self.dataset == "gtsrb":
-                        self.mara_model.setLowerBound(3 * j, image[j][0])
-                        self.mara_model.setUpperBound(3 * j, image[j][0])
-                        self.mara_model.setLowerBound(3 * j + 1, image[j][1])
-                        self.mara_model.setUpperBound(3 * j + 1, image[j][1])
-                        self.mara_model.setLowerBound(3 * j + 2, image[j][2])
-                        self.mara_model.setUpperBound(3 * j + 2, image[j][2])
-                    else:
-                        print("unsupported dataset")
-                exitCode, bounds, _ = self.mara_model.calculateBounds(options=options, verbose=False)
-                self.mara_model.clearProperty()
-                lower = bounds[self.outputVars[self.label]][0]
-                # lower = bounds[self.outputVars[self.label]][1]
-                # lower = bounds[self.outputVars[self.label]][1] - bounds[self.outputVars[self.label]][0]
-                output_lower.append(lower)
-            output_lower = np.asarray(output_lower)
-            sorted_index = output_lower.argsort()[::-1]
-            # sorted_index = output_lower.argsort()
-            self.inputVars = sorted_index
-            self.sensitivity = output_lower.reshape(width, height)
 
-        elif self.traverse == "bounds":
+        if self.traverse == "bounds":
             if self.keras_model.name.__contains__("10x2"):
                 width, height, channel = self.image.shape[0], self.image.shape[1], self.image.shape[2]
                 image = torch.from_numpy(self.image.flatten())
@@ -266,7 +124,7 @@ class VeriX:
                     for i in np.arange(width * height):
                         lower[i, i] = max(0, image[i] - epsilon)
                         upper[i, i] = min(1, image[i] + epsilon)
-                elif self.dataset == 'gtsrb':
+                elif self.dataset == 'gtsrb' or self.dataset == 'cifar10':
                     for i in np.arange(width * height):
                         lower[i, 3 * i] = max(0, image[3 * i] - epsilon)
                         upper[i, 3 * i] = min(1, image[3 * i] + epsilon)
@@ -297,7 +155,7 @@ class VeriX:
                     for i in np.arange(width * height):
                         lower[i, i] = max(0, image[i] - epsilon)
                         upper[i, i] = min(1, image[i] + epsilon)
-                elif self.dataset == 'gtsrb':
+                elif self.dataset == 'gtsrb' or self.dataset == 'cifar10':
                     for i in np.arange(width * height):
                         lower[i, 3 * i] = max(0, image[3 * i] - epsilon)
                         upper[i, 3 * i] = min(1, image[3 * i] + epsilon)
@@ -316,7 +174,7 @@ class VeriX:
                 ptb = PerturbationLpNorm(x_L=lower, x_U=upper)
                 b_x = BoundedTensor(images, ptb)
                 # lb, up = b_model.compute_bounds(x=b_x, method='IBP')
-                lb, up = b_model.compute_bounds(x=b_x, method='CROWN')
+                lb, up = b_model.compute_bounds(x=b_x, method='alpha-CROWN')
 
                 output_lower = lb[:, self.label].detach().numpy()
                 sorted_index = output_lower.argsort()[::-1]
@@ -354,7 +212,7 @@ class VeriX:
                 """
                 if self.dataset == "mnist":
                     image_batch_manip[i][i][:] = 1 - image_batch_manip[i][i][:]
-                elif self.dataset == "gtsrb":
+                elif self.dataset == "gtsrb" or self.dataset == "cifar10":
                     image_batch_manip[i][i][:] = 0
                 else:
                     print("Dataset not supported: try 'mnist' or 'gtsrb'.")
@@ -372,29 +230,7 @@ class VeriX:
             if plot_sensitivity:
                 save_figure(image=self.sensitivity,
                             path=self.directory + f"sensitivity-{self.traverse}.png")
-        elif self.traverse == "gradient" or self.traverse == "integrated_gradient":
-            if self.traverse == "gradient":
-                gradients = get_gradients(self.keras_model,
-                                          np.expand_dims(self.image, axis=0),
-                                          self.label)
-                gradient = gradients[0].numpy()
-            elif self.traverse == "integrated_gradient":
-                gradients = get_integrated_gradients(self.keras_model,
-                                                     self.image,
-                                                     # np.expand_dims(self.image, axis=0),
-                                                     self.label)
-                gradient = gradients.numpy()
-            else:
-                print("Not supported: try 'gradient' or 'integrated_gradient'.")
-            if self.dataset == "gtsrb":
-                # gradient = tf.image.rgb_to_grayscale(gradient).numpy()
-                gradient = np.average(gradient, axis=2)
-            sorted_index = gradient.flatten().argsort()
-            sorted_index = sorted_index[::-1]
-            self.inputVars = sorted_index
-            if plot_sensitivity:
-                save_figure(image=gradient,
-                            path=self.directory + f"sensitivity-{self.traverse}.png")
+
         elif self.traverse == "random":
             random.seed(seed)
             random.shuffle(self.inputVars)
@@ -485,7 +321,7 @@ class VeriX:
             if self.dataset == "mnist":
                 self.mara_model.setLowerBound(i, max(0, image[i][:] - epsilon))
                 self.mara_model.setUpperBound(i, min(1, image[i][:] + epsilon))
-            elif self.dataset == "gtsrb":
+            elif self.dataset == "gtsrb" or self.dataset == "cifar10":
                 self.mara_model.setLowerBound(3 * i, max(0, image[i][0] - epsilon))
                 self.mara_model.setUpperBound(3 * i, min(1, image[i][0] + epsilon))
                 self.mara_model.setLowerBound(3 * i + 1, max(0, image[i][1] - epsilon))
@@ -494,13 +330,14 @@ class VeriX:
                 self.mara_model.setUpperBound(3 * i + 2, min(1, image[i][2] + epsilon))
             else:
                 print("Dataset not supported: try 'mnist' or 'gtsrb'.")
-        fixed_pixels = list(set(self.inputVars) - set(pixels)) if fixed_pixels is None else fixed_pixels.astype(int)
+        # fixed_pixels = list(set(self.inputVars) - set(pixels)) if fixed_pixels is None else fixed_pixels.astype(int)
+        fixed_pixels = list(set(self.inputVars) - set(pixels))
         # for i in list(set(self.inputVars) - set(pixels)):
         for i in fixed_pixels:
             if self.dataset == "mnist":
                 self.mara_model.setLowerBound(i, image[i][:])
                 self.mara_model.setUpperBound(i, image[i][:])
-            elif self.dataset == "gtsrb":
+            elif self.dataset == "gtsrb" or self.dataset == "cifar10":
                 self.mara_model.setLowerBound(3 * i, image[i][0])
                 self.mara_model.setUpperBound(3 * i, image[i][0])
                 self.mara_model.setLowerBound(3 * i + 1, image[i][1])
@@ -601,7 +438,7 @@ class VeriX:
                     if self.dataset == "mnist":
                         self.mara_model.setLowerBound(i, max(0, image[i][:] - epsilon))
                         self.mara_model.setUpperBound(i, min(1, image[i][:] + epsilon))
-                    elif self.dataset == "gtsrb":
+                    elif self.dataset == "gtsrb" or self.dataset == "cifar10":
                         self.mara_model.setLowerBound(3 * i, max(0, image[i][0] - epsilon))
                         self.mara_model.setUpperBound(3 * i, min(1, image[i][0] + epsilon))
                         self.mara_model.setLowerBound(3 * i + 1, max(0, image[i][1] - epsilon))
@@ -617,7 +454,7 @@ class VeriX:
                     if self.dataset == "mnist":
                         self.mara_model.setLowerBound(i, image[i][:])
                         self.mara_model.setUpperBound(i, image[i][:])
-                    elif self.dataset == "gtsrb":
+                    elif self.dataset == "gtsrb" or self.dataset == "cifar10":
                         self.mara_model.setLowerBound(3 * i, image[i][0])
                         self.mara_model.setUpperBound(3 * i, image[i][0])
                         self.mara_model.setLowerBound(3 * i + 1, image[i][1])

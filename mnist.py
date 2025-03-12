@@ -27,9 +27,9 @@ show a simple example usage of VeriX.
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, default='mnist')
 parser.add_argument('--network', type=str, default='mnist-10x2')
-parser.add_argument('--index', type=int, default=0)
+parser.add_argument('--index', type=int, default=112)
 parser.add_argument('--epsilon', type=float, default=0.05)
-parser.add_argument('--traverse', type=str, default='heuristic')
+parser.add_argument('--traverse', type=str, default='bounds')
 args = parser.parse_args()
 
 dataset = args.dataset
@@ -55,7 +55,7 @@ if verix.check_robust(epsilon=epsilon):
     exit()
 
 
-# verix+: bound-traversal + logit ranking
+# # verix+: bound-traversal + logit ranking
 verix.new_traversal(epsilon=epsilon,
                     traverse="bounds")
 verix.compute_explanation(epsilon=epsilon,
@@ -63,21 +63,21 @@ verix.compute_explanation(epsilon=epsilon,
                           deploy_binary_search=False)
 
 # verix+: bound-traversal + logit ranking + binary search
-verix.new_traversal(epsilon=epsilon,
-                    traverse="bounds")
-verix.compute_explanation(epsilon=epsilon,
-                          approach="sequential",
-                          deploy_binary_search=True)
-
-# verix+: bound-traversal + logit ranking + quickXplain
-verix.new_traversal(epsilon=epsilon,
-                    traverse="bounds")
-verix.compute_explanation(epsilon=epsilon,
-                          approach="quickXplain")
+# verix.new_traversal(epsilon=epsilon,
+#                    traverse="bounds")
+# verix.compute_explanation(epsilon=epsilon,
+#                          approach="sequential",
+#                          deploy_binary_search=True)
+#
+# # verix+: bound-traversal + logit ranking + quickXplain
+# verix.new_traversal(epsilon=epsilon,
+#                     traverse="bounds")
+# verix.compute_explanation(epsilon=epsilon,
+#                           approach="quickXplain")
 
 # verix baseline: heuristic + sequential, no logit ranking / binary search / quickXplain
-verix.traversal_order(traverse="heuristic")
-verix.get_explanation(epsilon=epsilon)
+# verix.traversal_order(traverse="heuristic")
+# verix.get_explanation(epsilon=epsilon)
 
 
 verix_toc = time.time()
@@ -88,9 +88,9 @@ with open(verix_time_text, 'a') as f:
 verix_size_text = f"{dataset}-{model_name}-{traverse}-linf{epsilon}-size.txt"
 with open(verix_size_text, 'a') as f:
     f.write(str(len(verix.sat_set)+len(verix.timeout_set)) + '\n')
-marabou_time_text = f"{dataset}-{model_name}-{traverse}-linf{epsilon}-marabou.txt"
-with open(marabou_time_text, 'a') as f:
-    f.write(str(verix.marabou_time) + '\n')
+# marabou_time_text = f"{dataset}-{model_name}-{traverse}-linf{epsilon}-marabou.txt"
+# with open(marabou_time_text, 'a') as f:
+#     f.write(str(verix.marabou_time) + '\n')
 
 exit()
 
